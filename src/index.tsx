@@ -81,6 +81,8 @@ function OverviewData({ user, dataType }: { user: string; dataType: string }) {
   // 🤮 Whaaaatt??
   const dataTypeRef = useRef(dataType);
   dataTypeRef.current = dataType;
+  const userRef = useRef(user);
+  userRef.current = user;
 
   // Load initial data:
   // Whenever we are first load or dataType changes,
@@ -121,12 +123,15 @@ function OverviewData({ user, dataType }: { user: string; dataType: string }) {
 
     const response = await getItems({ user, dataType, page: state.nextPage });
 
-    if (dataTypeRef.current === dataType) {
-      console.log(`Finished loading ${dataType} page ${state.nextPage}.`);
+    // 🤮 Whyyy??
+    if (dataTypeRef.current === dataType && userRef.current === user) {
+      console.log(
+        `Finished loading ${user}'s ${dataType} page ${state.nextPage}.`
+      );
       dispatch({ type: "LOAD_COMPLETE", response });
     } else {
       console.log(
-        `Ref (${dataTypeRef.current}) doesn't match request dataType ${dataType}`
+        `Ref (${dataTypeRef.current}, ${userRef.current}) doesn't match request props (${dataType}, ${user})`
       );
     }
   };
