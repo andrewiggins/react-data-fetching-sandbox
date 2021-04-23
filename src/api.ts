@@ -5,12 +5,12 @@ export interface Item {
   data: string;
 }
 
-export interface Response {
+export interface ApiResponse {
   items: Item[];
   nextPage: number;
 }
 
-const data: Record<string, Response[]> = {
+const data: Record<string, ApiResponse[]> = {
   browser: [
     // Page 0 or null
     {
@@ -81,7 +81,7 @@ export function getItems({
   dataType,
   page,
   signal = undefined
-}: Request): Promise<Response> {
+}: Request): Promise<ApiResponse> {
   return new Promise((resolve) => {
     setTimeout(() => {
       if (!signal || !signal.aborted) {
