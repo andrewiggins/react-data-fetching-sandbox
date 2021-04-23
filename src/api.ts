@@ -72,12 +72,14 @@ const data: Record<string, ApiResponse[]> = {
 };
 
 interface Request {
+  user: string;
   dataType: string;
   page: number;
   signal?: AbortSignal;
 }
 
 export function getItems({
+  user,
   dataType,
   page,
   signal = undefined
@@ -85,7 +87,16 @@ export function getItems({
   return new Promise((resolve) => {
     setTimeout(() => {
       if (!signal || !signal.aborted) {
-        resolve(data[dataType][page ?? 0]);
+        let result = data[dataType][page ?? 0];
+        result = {
+          ...result,
+          items: result.items.map((item) => ({
+            ...item,
+            data: `${user} ${item.data}`
+          }))
+        };
+
+        resolve(result);
       } else {
         console.log(`Load of ${dataType} page ${page} was aborted!`);
       }

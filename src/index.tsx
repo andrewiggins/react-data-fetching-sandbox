@@ -75,7 +75,7 @@ const initialState: ReducerState = {
   nextPage: null
 };
 
-function OverviewData({ dataType }: { dataType: string }) {
+function OverviewData({ user, dataType }: { user: string; dataType: string }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   // 🤮 Whaaaatt??
@@ -93,7 +93,12 @@ function OverviewData({ dataType }: { dataType: string }) {
     dispatch({ type: "INITIAL_LOAD" });
 
     let aborter = new AbortController();
-    getItems({ dataType, page: 0, signal: aborter.signal }).then((response) => {
+    getItems({
+      user,
+      dataType,
+      page: 0,
+      signal: aborter.signal
+    }).then((response) => {
       console.log(`Finished loading initial ${dataType} page`);
       dispatch({ type: "LOAD_COMPLETE", response });
 
@@ -107,14 +112,14 @@ function OverviewData({ dataType }: { dataType: string }) {
         aborter.abort();
       }
     };
-  }, [dataType]);
+  }, [user, dataType]);
 
   // Click handler to get more data
   const loadMore = async () => {
     console.log(`Loading ${dataType} page ${state.nextPage}...`);
     dispatch({ type: "LOAD_MORE" });
 
-    const response = await getItems({ dataType, page: state.nextPage });
+    const response = await getItems({ user, dataType, page: state.nextPage });
 
     if (dataTypeRef.current === dataType) {
       console.log(`Finished loading ${dataType} page ${state.nextPage}.`);
@@ -128,12 +133,16 @@ function OverviewData({ dataType }: { dataType: string }) {
 
   return (
     <div>
-      <h2>{dataType}</h2>
+      <h2>
+        {user}'s {dataType} data
+      </h2>
       {/* {children} */}
       {state.items == null ? (
         // If we don't have any data, and we are loading it, let the user know
         state.state === "loading" ? (
-          <p>Loading</p>
+          <p>
+            Loading {user}'s {dataType} data...
+          </p>
         ) : null
       ) : (
         <Fragment>
@@ -142,7 +151,7 @@ function OverviewData({ dataType }: { dataType: string }) {
           {state.nextPage != null ? (
             state.state === "loading" ? (
               // If we are currently loading more data, let the user know
-              <p>Loading more data</p>
+              <p>Loading more data...</p>
             ) : (
               // If we have another page of data and aren't already loading more data,
               // show a button to load it
@@ -156,27 +165,32 @@ function OverviewData({ dataType }: { dataType: string }) {
   );
 }
 
+const users = ["Bill", "Susan"];
 const dataTypes = ["browser", "voice"];
-function DataTypeSelector({ dataType, setDataType }) {
+function PropSelector({ values, value, setValue }) {
   return (
-    <div>
-      <select value={dataType} onChange={(e) => setDataType(e.target.value)}>
-        {dataTypes.map((d) => (
-          <option value={d} key={d}>
-            {d}
-          </option>
-        ))}
-      </select>
-    </div>
+    <select value={value} onChange={(e) => setValue(e.target.value)}>
+      {values.map((v) => (
+        <option value={v} key={v}>
+          {v}
+        </option>
+      ))}
+    </select>
   );
 }
 
 function App() {
+  const [user, setUser] = useState(users[0]);
   const [dataType, setDataType] = useState(dataTypes[0]);
   return (
     <Fragment>
-      <DataTypeSelector dataType={dataType} setDataType={setDataType} />
-      <OverviewData dataType={dataType} />
+      <PropSelector values={users} value={user} setValue={setUser} />
+      <PropSelector
+        values={dataTypes}
+        value={dataType}
+        setValue={setDataType}
+      />
+      <OverviewData user={user} dataType={dataType} />
     </Fragment>
   );
 }
