@@ -15,6 +15,22 @@ import { getItems, Item, ApiResponse } from "./api";
 // I left out the necessary focus management logic, though in a real app
 // that would absolutely be necessary for UI similar to this.
 
+/*
+Ugh. Two problems:
+1. Reset state on prop change (anti-pattern?)
+2. Need to avoid circular dependencies between initial load and load next page
+
+Some approaches to solutions:
+0. Manual Prop diffing
+  - diff props to ensure that query result matches latest props
+1. Hashing + key
+  - "hash" the props and use that as a key to the component (similar to what React docs on derived state suggested).
+    Also how I think react-query partially deals with this
+2. Lift the items state into the App component so all state is managed centrally
+3. Hashing + Move query state out of the component (ala react-query)
+  - would likely require some kind of query hashing solution too
+*/
+
 function ItemList({ items }: { items: Item[] }) {
   return (
     <ul>
@@ -23,6 +39,22 @@ function ItemList({ items }: { items: Item[] }) {
       ))}
     </ul>
   );
+}
+
+function areShallowSame(o1, o2) {
+  for (let key in o1) {
+    if (o1[key] !== o2[key]) {
+      return false;
+    }
+  }
+
+  for (let key in o2) {
+    if (o1[key] !== o2[key]) {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 interface ReducerState {
@@ -75,14 +107,12 @@ const initialState: ReducerState = {
   nextPage: null
 };
 
-function OverviewData({ user, dataType }: { user: string; dataType: string }) {
+function PageData(props: { user: string; dataType: string }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const latestProps = useRef(props);
+  latestProps.current = props;
 
-  // 🤮 Whaaaatt??
-  const dataTypeRef = useRef(dataType);
-  dataTypeRef.current = dataType;
-  const userRef = useRef(user);
-  userRef.current = user;
+  // const { dataType, user } = props;
 
   // Load initial data:
   // Whenever we are first load or dataType changes,
@@ -91,17 +121,19 @@ function OverviewData({ user, dataType }: { user: string; dataType: string }) {
     // In case our dataType prop changes, let's clear our existing items
     // and page since they were for the old dataType and not relevant
     // to the current datatype
-    console.log(`Loading initial ${dataType} page...`);
+    console.log(`Loading ${props.user} initial ${props.dataType} page...`);
     dispatch({ type: "INITIAL_LOAD" });
 
     let aborter = new AbortController();
     getItems({
-      user,
-      dataType,
+      user: props.user,
+      dataType: props.dataType,
       page: 0,
       signal: aborter.signal
     }).then((response) => {
-      console.log(`Finished loading initial ${dataType} page`);
+      console.log(
+        `Finished ${props.user} loading initial ${props.dataType} page`
+      );
       dispatch({ type: "LOAD_COMPLETE", response });
 
       // Initial data render was successful! Clear AbortController
@@ -110,28 +142,34 @@ function OverviewData({ user, dataType }: { user: string; dataType: string }) {
 
     return () => {
       if (aborter) {
-        console.log(`Aborting initial ${dataType} page...`);
+        console.log(`Aborting initial ${props.dataType} page...`);
         aborter.abort();
       }
     };
-  }, [user, dataType]);
+  }, [props.dataType, props.user]);
 
   // Click handler to get more data
   const loadMore = async () => {
-    console.log(`Loading ${dataType} page ${state.nextPage}...`);
+    console.log(`Loading ${props.dataType} page ${state.nextPage}...`);
     dispatch({ type: "LOAD_MORE" });
 
-    const response = await getItems({ user, dataType, page: state.nextPage });
+    const response = await getItems({
+      user: props.user,
+      dataType: props.dataType,
+      page: state.nextPage
+    });
 
     // 🤮 Whyyy??
-    if (dataTypeRef.current === dataType && userRef.current === user) {
+    if (areShallowSame(props, latestProps.current)) {
       console.log(
-        `Finished loading ${user}'s ${dataType} page ${state.nextPage}.`
+        `Finished loading ${props.user}'s ${props.dataType} page ${state.nextPage}.`
       );
       dispatch({ type: "LOAD_COMPLETE", response });
     } else {
       console.log(
-        `Ref (${dataTypeRef.current}, ${userRef.current}) doesn't match request props (${dataType}, ${user})`
+        `Latest props (${JSON.stringify(
+          latestProps.current
+        )}) doesn't match request props (${JSON.stringify(props)})`
       );
     }
   };
@@ -139,14 +177,13 @@ function OverviewData({ user, dataType }: { user: string; dataType: string }) {
   return (
     <div>
       <h2>
-        {user}'s {dataType} data
+        {props.user}'s {props.dataType} data
       </h2>
-      {/* {children} */}
       {state.items == null ? (
         // If we don't have any data, and we are loading it, let the user know
         state.state === "loading" ? (
           <p>
-            Loading {user}'s {dataType} data...
+            Loading {props.user}'s {props.dataType} data...
           </p>
         ) : null
       ) : (
@@ -195,7 +232,7 @@ function App() {
         value={dataType}
         setValue={setDataType}
       />
-      <OverviewData user={user} dataType={dataType} />
+      <PageData user={user} dataType={dataType} />
     </Fragment>
   );
 }
