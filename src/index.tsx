@@ -1,11 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useReducer,
-  Fragment,
-  StrictMode
-} from "react";
+import { useState, useEffect, useReducer, Fragment, StrictMode } from "react";
 import ReactDOM from "react-dom";
 import { getItems, Item, ApiResponse } from "./api";
 
@@ -41,24 +34,8 @@ function ItemList({ items }: { items: Item[] }) {
   );
 }
 
-function areShallowSame(o1, o2) {
-  for (let key in o1) {
-    if (o1[key] !== o2[key]) {
-      return false;
-    }
-  }
-
-  for (let key in o2) {
-    if (o1[key] !== o2[key]) {
-      return false;
-    }
-  }
-
-  return false;
-}
-
 interface ReducerState {
-  state: "loading" | "idle" | "error";
+  state: "initialLoad" | "idle" | "updating" | "error";
   items: Item[] | null;
   nextPage: number | null;
   error?: Error;
@@ -83,9 +60,9 @@ type Actions =
 function reducer(state: ReducerState, action: Actions): ReducerState {
   switch (action.type) {
     case "INITIAL_LOAD":
-      return { state: "loading", items: null, nextPage: null };
+      return { state: "initialLoad", items: null, nextPage: null };
     case "LOAD_MORE":
-      return { ...state, state: "loading" };
+      return { ...state, state: "updating" };
     case "LOAD_COMPLETE":
       const { items, nextPage } = action.response;
       return {
@@ -102,20 +79,13 @@ function reducer(state: ReducerState, action: Actions): ReducerState {
 }
 
 const initialState: ReducerState = {
-  state: "idle",
+  state: "initialLoad",
   items: null,
   nextPage: null
 };
 
 function PageData(props: { user: string; dataType: string }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const latestProps = useRef(props);
-
-  useEffect(() => {
-    latestProps.current = props;
-  });
-
-  // const { dataType, user } = props;
 
   // Load initial data:
   // Whenever we are first load or dataType changes,
@@ -137,10 +107,12 @@ function PageData(props: { user: string; dataType: string }) {
       console.log(
         `Finished ${props.user} loading initial ${props.dataType} page`
       );
-      dispatch({ type: "LOAD_COMPLETE", response });
 
-      // Initial data render was successful! Clear AbortController
-      aborter = null;
+      if (!aborter.signal.aborted) {
+        dispatch({ type: "LOAD_COMPLETE", response });
+        // Initial data render was successful! Clear AbortController
+        aborter = null;
+      }
     });
 
     return () => {
@@ -151,61 +123,71 @@ function PageData(props: { user: string; dataType: string }) {
     };
   }, [props.dataType, props.user]);
 
-  // Click handler to get more data
-  const loadMore = async () => {
-    console.log(`Loading ${props.dataType} page ${state.nextPage}...`);
-    dispatch({ type: "LOAD_MORE" });
+  // Update effect
+  useEffect(() => {
+    if (state.state === "updating") {
+      console.log(`Loading ${props.dataType} page ${state.nextPage}...`);
+      dispatch({ type: "LOAD_MORE" });
 
-    const response = await getItems({
-      user: props.user,
-      dataType: props.dataType,
-      page: state.nextPage
-    });
+      let aborter = new AbortController();
+      getItems({
+        user: props.user,
+        dataType: props.dataType,
+        page: state.nextPage,
+        signal: aborter.signal
+      }).then((response) => {
+        console.log(
+          `Finished loading ${props.user}'s ${props.dataType} page ${state.nextPage}.`
+        );
 
-    // 🤮 Whyyy??
-    if (areShallowSame(props, latestProps.current)) {
-      console.log(
-        `Finished loading ${props.user}'s ${props.dataType} page ${state.nextPage}.`
-      );
-      dispatch({ type: "LOAD_COMPLETE", response });
-    } else {
-      console.log(
-        `Latest props (${JSON.stringify(
-          latestProps.current
-        )}) doesn't match request props (${JSON.stringify(props)})`
-      );
+        if (!aborter.signal.aborted) {
+          dispatch({ type: "LOAD_COMPLETE", response });
+          aborter = null;
+        }
+      });
+
+      return () => {
+        if (aborter) {
+          console.log(
+            `Aborting loading ${props.user} ${props.dataType} page ${state.nextPage}...`
+          );
+          aborter.abort();
+        }
+      };
     }
-  };
+  }, [props.dataType, props.user, state.state, state.nextPage]);
 
   return (
     <div>
       <h2>
         {props.user}'s {props.dataType} data
       </h2>
-      {state.items == null ? (
+      {
         // If we don't have any data, and we are loading it, let the user know
-        state.state === "loading" ? (
+        state.state === "initialLoad" ? (
           <p>
             Loading {props.user}'s {props.dataType} data...
           </p>
-        ) : null
-      ) : (
-        <Fragment>
-          {/* If we have data, show it! */}
-          <ItemList items={state.items} />
-          {state.nextPage != null ? (
-            state.state === "loading" ? (
-              // If we are currently loading more data, let the user know
-              <p>Loading more data...</p>
-            ) : (
-              // If we have another page of data and aren't already loading more data,
-              // show a button to load it
-              <button onClick={loadMore}>Load more!</button>
-            )
-          ) : null}
-          {/* We don't have a nextPage so show nothing */}
-        </Fragment>
-      )}
+        ) : (
+          <Fragment>
+            {/* If we have data, show it! */}
+            <ItemList items={state.items} />
+            {state.nextPage != null ? (
+              state.state === "updating" ? (
+                // If we are currently loading more data, let the user know
+                <p>Loading more data...</p>
+              ) : (
+                // If we have another page of data and aren't already loading more data,
+                // show a button to load it
+                <button onClick={() => dispatch({ type: "LOAD_MORE" })}>
+                  Load more!
+                </button>
+              )
+            ) : null}
+            {/* We don't have a nextPage so show nothing */}
+          </Fragment>
+        )
+      }
     </div>
   );
 }
