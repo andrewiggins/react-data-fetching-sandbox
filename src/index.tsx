@@ -1,4 +1,11 @@
-import { useState, useEffect, useReducer, Fragment, StrictMode } from "react";
+import {
+  useState,
+  useEffect,
+  useReducer,
+  useRef,
+  Fragment,
+  StrictMode
+} from "react";
 import ReactDOM from "react-dom";
 import { getItems, Item, ApiResponse } from "./api";
 
@@ -32,6 +39,14 @@ function ItemList({ items }: { items: Item[] }) {
       ))}
     </ul>
   );
+}
+
+function usePrevious<T>(value: T): T {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
 }
 
 interface ReducerState {
@@ -87,45 +102,25 @@ const initialState: ReducerState = {
 function PageData(props: { user: string; dataType: string }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Load initial data:
-  // Whenever we are first load or dataType changes,
-  // replace our existing state with the right data
-  useEffect(() => {
-    // In case our dataType prop changes, let's clear our existing items
-    // and page since they were for the old dataType and not relevant
-    // to the current datatype
-    console.log(`Loading ${props.user} initial ${props.dataType} page...`);
+  const prevProps = usePrevious(props);
+  if (
+    // If we aren't already doing an initialLoad and props have changed,
+    // reset our state and kick off an initialLoad
+    state.state !== "initialLoad" &&
+    (prevProps.user !== props.user || prevProps.dataType !== props.dataType)
+  ) {
     dispatch({ type: "INITIAL_LOAD" });
+  }
 
-    let aborter = new AbortController();
-    getItems({
+  useEffect(() => {
+    console.log("useEffect:", {
       user: props.user,
       dataType: props.dataType,
-      page: 0,
-      signal: aborter.signal
-    }).then((response) => {
-      console.log(
-        `Finished ${props.user} loading initial ${props.dataType} page`
-      );
-
-      if (!aborter.signal.aborted) {
-        dispatch({ type: "LOAD_COMPLETE", response });
-        // Initial data render was successful! Clear AbortController
-        aborter = null;
-      }
+      state: state.state,
+      nextPage: state.nextPage
     });
 
-    return () => {
-      if (aborter) {
-        console.log(`Aborting ${props.user} initial ${props.dataType} page...`);
-        aborter.abort();
-      }
-    };
-  }, [props.dataType, props.user]);
-
-  // Update effect
-  useEffect(() => {
-    if (state.state === "updating") {
+    if (state.state === "initialLoad" || state.state === "updating") {
       console.log(
         `Loading ${props.user} ${props.dataType} page ${state.nextPage}...`
       );
@@ -195,9 +190,16 @@ function PageData(props: { user: string; dataType: string }) {
 
 const users = ["Bill", "Susan"];
 const dataTypes = ["browser", "voice"];
-function PropSelector({ values, value, setValue }) {
+function PropSelector({ name, values, value, setValue }) {
   return (
-    <select value={value} onChange={(e) => setValue(e.target.value)}>
+    <select
+      name={name}
+      value={value}
+      onChange={(e) => {
+        console.log(`Changing ${name} from ${value} to ${e.target.value}...`);
+        setValue(e.target.value);
+      }}
+    >
       {values.map((v) => (
         <option value={v} key={v}>
           {v}
@@ -212,8 +214,14 @@ function App() {
   const [dataType, setDataType] = useState(dataTypes[0]);
   return (
     <Fragment>
-      <PropSelector values={users} value={user} setValue={setUser} />
       <PropSelector
+        name="user"
+        values={users}
+        value={user}
+        setValue={setUser}
+      />
+      <PropSelector
+        name="dataType"
         values={dataTypes}
         value={dataType}
         setValue={setDataType}
