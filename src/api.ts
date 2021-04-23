@@ -98,7 +98,9 @@ export function getItems({
 
         resolve(result);
       } else {
-        console.log(`Load of ${dataType} page ${page} was aborted!`);
+        console.log(
+          `API: Load of ${user} ${dataType} page ${page} was aborted!`
+        );
       }
     }, delayMs);
   });

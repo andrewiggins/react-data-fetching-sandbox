@@ -117,7 +117,7 @@ function PageData(props: { user: string; dataType: string }) {
 
     return () => {
       if (aborter) {
-        console.log(`Aborting initial ${props.dataType} page...`);
+        console.log(`Aborting ${props.user} initial ${props.dataType} page...`);
         aborter.abort();
       }
     };
@@ -126,8 +126,9 @@ function PageData(props: { user: string; dataType: string }) {
   // Update effect
   useEffect(() => {
     if (state.state === "updating") {
-      console.log(`Loading ${props.dataType} page ${state.nextPage}...`);
-      dispatch({ type: "LOAD_MORE" });
+      console.log(
+        `Loading ${props.user} ${props.dataType} page ${state.nextPage}...`
+      );
 
       let aborter = new AbortController();
       getItems({
