@@ -75,7 +75,7 @@ interface Request {
   user: string;
   dataType: string;
   page: number;
-  signal?: AbortSignal;
+  signal: AbortSignal;
 }
 
 export function getItems({
@@ -84,10 +84,11 @@ export function getItems({
   page,
   signal = undefined
 }: Request): Promise<ApiResponse> {
+  page = page || 0;
   return new Promise((resolve) => {
-    setTimeout(() => {
+    let timeoutId = setTimeout(() => {
       if (!signal || !signal.aborted) {
-        let result = data[dataType][page ?? 0];
+        let result = data[dataType][page];
         result = {
           ...result,
           items: result.items.map((item) => ({
@@ -103,5 +104,14 @@ export function getItems({
         );
       }
     }, delayMs);
+
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        console.log(
+          `API: Received abort event for ${user} ${dataType} page ${page}`
+        );
+        clearTimeout(timeoutId);
+      });
+    }
   });
 }
