@@ -110,7 +110,10 @@ const initialState: ReducerState = {
 function PageData(props: { user: string; dataType: string }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const latestProps = useRef(props);
-  latestProps.current = props;
+
+  useEffect(() => {
+    latestProps.current = props;
+  });
 
   // const { dataType, user } = props;
 
