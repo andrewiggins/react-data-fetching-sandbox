@@ -7,7 +7,7 @@ import {
   StrictMode
 } from "react";
 import ReactDOM from "react-dom";
-import { getItems, Item, ApiResponse } from "./api";
+import { getItems, Item, ApiResponse, errorDataType } from "./api";
 
 // NOTE!
 // =======================
@@ -50,7 +50,7 @@ function usePrevious<T>(value: T): T {
 }
 
 interface ReducerState {
-  state: "initialLoad" | "idle" | "updating" | "error";
+  state: "initialLoad" | "idle" | "updating" | "initialError" | "updateError";
   items: Item[] | null;
   nextPage: number | null;
   error?: Error;
@@ -68,7 +68,11 @@ type Actions =
       response: ApiResponse;
     }
   | {
-      type: "ERROR";
+      type: "INITIAL_ERROR";
+      error: Error;
+    }
+  | {
+      type: "LOAD_MORE_ERROR";
       error: Error;
     };
 
@@ -86,8 +90,10 @@ function reducer(state: ReducerState, action: Actions): ReducerState {
         nextPage,
         items: state.items ? state.items.concat(items) : items
       };
-    case "ERROR":
-      return { ...state, error: action.error };
+    case "INITIAL_ERROR":
+      return { ...state, state: "initialError", error: action.error };
+    case "LOAD_MORE_ERROR":
+      return { ...state, state: "updateError", error: action.error };
     default:
       throw new Error(`Unrecognized action: ${JSON.stringify(action)}`);
   }
@@ -131,16 +137,30 @@ function PageData(props: { user: string; dataType: string }) {
         dataType: props.dataType,
         page: state.nextPage,
         signal: aborter.signal
-      }).then((response) => {
-        console.log(
-          `Finished loading ${props.user}'s ${props.dataType} page ${state.nextPage}.`
-        );
+      })
+        .then((response) => {
+          console.log(
+            `Finished loading ${props.user}'s ${props.dataType} page ${state.nextPage}.`
+          );
 
-        if (!aborter.signal.aborted) {
-          dispatch({ type: "LOAD_COMPLETE", response });
+          if (!aborter.signal.aborted) {
+            dispatch({ type: "LOAD_COMPLETE", response });
+          }
+        })
+        .catch((error) => {
+          console.log("API failed with error:", error);
+          dispatch({
+            type:
+              state.state === "initialLoad"
+                ? "INITIAL_ERROR"
+                : "LOAD_MORE_ERROR",
+            error
+          });
+        })
+        // @ts-ignore - Trust me TS, `finally` is a thing
+        .finally(() => {
           aborter = null;
-        }
-      });
+        });
 
       return () => {
         if (aborter) {
@@ -164,11 +184,25 @@ function PageData(props: { user: string; dataType: string }) {
           <p>
             Loading {props.user}'s {props.dataType} data...
           </p>
+        ) : state.state === "initialError" ? (
+          <p>
+            Whoops! That didn't work.{" "}
+            <button onClick={() => dispatch({ type: "INITIAL_LOAD" })}>
+              Try again
+            </button>
+          </p>
         ) : (
           <Fragment>
             {/* If we have data, show it! */}
             <ItemList items={state.items} />
-            {state.nextPage != null ? (
+            {state.state === "updateError" ? (
+              <p>
+                Whoops! That didn't work.{" "}
+                <button onClick={() => dispatch({ type: "LOAD_MORE" })}>
+                  Try again
+                </button>
+              </p>
+            ) : state.nextPage != null ? (
               state.state === "updating" ? (
                 // If we are currently loading more data, let the user know
                 <p>Loading more data...</p>
@@ -189,7 +223,7 @@ function PageData(props: { user: string; dataType: string }) {
 }
 
 const users = ["Bill", "Susan"];
-const dataTypes = ["browser", "voice"];
+const dataTypes = ["browser", "voice", errorDataType];
 function PropSelector({ name, values, value, setValue }) {
   return (
     <select
