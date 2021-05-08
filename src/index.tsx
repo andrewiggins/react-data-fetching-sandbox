@@ -117,6 +117,7 @@ function PageData(props: { user: string; dataType: string }) {
     state.state !== "initialLoad" &&
     (prevProps.user !== props.user || prevProps.dataType !== props.dataType)
   ) {
+    // This will immediately rerender this component and so is cheap
     dispatch({ type: "INITIAL_LOAD" });
   }
 
