@@ -16,13 +16,14 @@ import { getItems, Item, ApiResponse, errorDataType } from "./api";
 // that would absolutely be necessary for UI similar to this.
 
 /*
-Ugh. Two problems:
+Two problems:
 1. Reset state on prop change (anti-pattern?)
 2. Need to avoid circular dependencies between initial load and load next page
 
 Some approaches to solutions:
 0. Manual Prop diffing
-  - diff props to ensure that query result matches latest props
+  - If request happens outside of an effect (e.g. in event hanlder),
+    then we need to diff props to ensure that query result matches latest props
 1. Hashing + key
   - "hash" the props and use that as a key to the component (similar to what React docs on derived state suggested).
     Also how I think react-query partially deals with this
@@ -41,6 +42,7 @@ function ItemList({ items }: { items: Item[] }) {
   );
 }
 
+// From: https://reactjs.org/docs/hooks-faq.html#how-to-get-the-previous-props-or-state
 function usePrevious<T>(value: T): T {
   const ref = useRef<T>(null);
   useEffect(() => {
@@ -126,6 +128,7 @@ function PageData(props: { user: string; dataType: string }) {
       nextPage: state.nextPage
     });
 
+    // We only execute the request if our reducer state specifies we should
     if (state.state === "initialLoad" || state.state === "updating") {
       console.log(
         `Loading ${props.user} ${props.dataType} page ${state.nextPage}...`
@@ -159,6 +162,7 @@ function PageData(props: { user: string; dataType: string }) {
         })
         // @ts-ignore - Trust me TS, `finally` is a thing
         .finally(() => {
+          // Probably not necessary, but I like it.
           aborter = null;
         });
 
@@ -196,6 +200,7 @@ function PageData(props: { user: string; dataType: string }) {
             {/* If we have data, show it! */}
             <ItemList items={state.items} />
             {state.state === "updateError" ? (
+              // Uh oh, the previous load more failed. Let's give the user a chance to retry
               <p>
                 Whoops! That didn't work.{" "}
                 <button onClick={() => dispatch({ type: "LOAD_MORE" })}>
@@ -203,6 +208,7 @@ function PageData(props: { user: string; dataType: string }) {
                 </button>
               </p>
             ) : state.nextPage != null ? (
+              // We have a nextPage! We should either show "loading" or a button to load it
               state.state === "updating" ? (
                 // If we are currently loading more data, let the user know
                 <p>Loading more data...</p>
