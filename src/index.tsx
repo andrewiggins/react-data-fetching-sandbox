@@ -272,10 +272,10 @@ function App() {
   );
 }
 
-const rootElement = document.getElementById("root");
-ReactDOM.render(
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(
+  // FYI - Remove  <StrictMode> to remove dev-only initial mount console logs
   <StrictMode>
     <App />
-  </StrictMode>,
-  rootElement
+  </StrictMode>
 );

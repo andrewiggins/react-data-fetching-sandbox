@@ -5,8 +5,8 @@
   "keywords": [],
   "main": "src/index.js",
   "dependencies": {
-    "react": "17.0.2",
-    "react-dom": "17.0.2",
+    "react": "18.0.0-alpha-e6be2d531",
+    "react-dom": "18.0.0-alpha-e6be2d531",
     "react-scripts": "4.0.0"
   },
   "devDependencies": {
